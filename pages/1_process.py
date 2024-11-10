@@ -1,16 +1,16 @@
 from datetime import timedelta
 from timeit import default_timer as timer
+
 import streamlit as st
 
-from pages import add_user_red_list, add_pid_red_list, add_command_red_list, connection
-
+from pages import add_command_red_list, add_pid_red_list, add_user_red_list, connection
 
 start_timer = timer()
-db = connection("/Users/victormeyer/Dev/Self/rstracer/export/data/", "parquet")
+con = connection()
 
 st.set_page_config(
     page_title="Process",
-    page_icon="⚙️",
+    page_icon="⚙",
     layout="wide",
 )
 st.header("Process", divider=True)
@@ -19,7 +19,7 @@ st.header("Process", divider=True)
 
 # Time selection
 
-(min_date, max_date) = db.execute(
+(min_date, max_date) = con.execute(
     """
     SELECT
         MIN(created_at) AS min_date_process,
@@ -40,13 +40,13 @@ st.sidebar.header("Parameters", divider=True)
 
 # Red list
 
-hide_user = add_user_red_list(db, st.sidebar)
-hide_pid = add_pid_red_list(db, st.sidebar)
-hide_command = add_command_red_list(db, st.sidebar)
+hide_user = add_user_red_list(con, st.sidebar)
+hide_pid = add_pid_red_list(con, st.sidebar)
+hide_command = add_command_red_list(con, st.sidebar)
 
 # Mem & Cpu Analysis
 
-resource_per_command = db.execute(
+resource_per_command = con.execute(
     """
 SELECT
     SUM(fact.pcpu) AS pcpu,
@@ -88,7 +88,7 @@ st.area_chart(
 # Process by network
 st.subheader("Network I/O by Command", divider=True)
 
-packet_process = db.execute(
+packet_process = con.execute(
     """
 SELECT
     TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM packet.created_at) / 10) * 10) AT TIME ZONE 'UTC' AS time,
@@ -124,7 +124,7 @@ st.subheader("Process Repartition", divider=True)
 
 # Process by Commands
 
-process_by_command_count = db.execute(
+process_by_command_count = con.execute(
     """
 WITH process AS
 (
@@ -165,7 +165,7 @@ st.bar_chart(
 
 # Process by User
 
-process_by_user_count = db.execute(
+process_by_user_count = con.execute(
     """
 WITH process AS
 (
@@ -211,7 +211,7 @@ metadata_columns = st.columns(3)
 
 # Process per children count
 
-pids_per_process = db.execute(
+pids_per_process = con.execute(
     """
 WITH ppid_count AS
 (
@@ -250,7 +250,7 @@ with metadata_columns[0]:
 
 # Oldest process
 
-pids_per_age = db.execute(
+pids_per_age = con.execute(
     """
 SELECT DISTINCT
     fact.pid,
@@ -280,7 +280,7 @@ with metadata_columns[1]:
 
 # Most used commands
 
-full_commands_count = db.execute(
+full_commands_count = con.execute(
     """
 SELECT DISTINCT
     COUNT(DISTINCT fact.pid) AS count,
@@ -314,7 +314,7 @@ st.sidebar.header("Statistics", divider=True)
 
 # Process count
 
-process_total = db.execute(
+process_total = con.execute(
     """
 SELECT
     COUNT(DISTINCT ROW(fact.pid, dim.started_at)) AS count,
@@ -338,7 +338,7 @@ st.sidebar.write("Process total: ", process_total)
 
 # Sudo process count
 
-process_root = db.execute(
+process_root = con.execute(
     """
 SELECT
     COUNT(DISTINCT ROW(fact.pid, dim.started_at)) AS count,

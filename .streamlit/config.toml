@@ -1,0 +1,8 @@
+[theme]
+
+primaryColor = "#50FA7B"  # Soft neon green for accents
+backgroundColor = "#282A36"  # Dark gray with a slight purple tint (Dracula theme base)
+secondaryBackgroundColor = "#44475A"  # Slightly lighter gray for sidebar contrast
+textColor = "#F8F8F2"  # Off-white for high readability on dark backgrounds
+headingColor = "#BD93F9"  # Soft purple for a subtle, Dracula-styled pop in headings
+font = "monospace"

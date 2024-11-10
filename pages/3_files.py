@@ -1,10 +1,12 @@
 from datetime import timedelta
 from timeit import default_timer as timer
+
 import streamlit as st
-from pages import connection, add_user_red_list, add_pid_red_list, add_command_red_list
+
+from pages import add_command_red_list, add_pid_red_list, add_user_red_list, connection
 
 start_timer = timer()
-db = connection("/Users/victormeyer/Dev/Self/rstracer/export/data/", "parquet")
+con = connection()
 
 st.set_page_config(
     page_title="Files",
@@ -17,7 +19,7 @@ st.header("Regular Files", divider=True)
 
 # Time selection
 
-(min_date, max_date) = db.execute(
+(min_date, max_date) = con.execute(
     """
 SELECT
   MIN(started_at) AS min_date_file,
@@ -39,16 +41,16 @@ st.sidebar.header("Parameters", divider=True)
 
 # Red list
 
-hide_user = add_user_red_list(db, st.sidebar)
-hide_pid = add_pid_red_list(db, st.sidebar)
-hide_command = add_command_red_list(db, st.sidebar)
+hide_user = add_user_red_list(con, st.sidebar)
+hide_pid = add_pid_red_list(con, st.sidebar)
+hide_command = add_command_red_list(con, st.sidebar)
 
 # Open files partition by 5 secs
 
 st.subheader("File Activity", divider=True)
 open_files_chart_row = st.columns(2)
 
-files_count = db.execute(
+files_count = con.execute(
     """
 SELECT
   COUNT(DISTINCT dim.name) AS count,
@@ -81,7 +83,7 @@ st.line_chart(data=files_count, x="created_at", y="count", x_label="date", y_lab
 st.subheader("By Command Analysis", divider=True)
 
 
-file_by_command_count = db.execute(
+file_by_command_count = con.execute(
     """
 SELECT
   command,
@@ -136,7 +138,7 @@ st.bar_chart(
     color="command",
 )
 
-modification_by_commands = db.execute(
+modification_by_commands = con.execute(
     """
 SELECT
   created_at,
@@ -203,7 +205,7 @@ st.area_chart(
 
 st.subheader("By User Analysis", divider=True)
 
-file_by_user_count = db.execute(
+file_by_user_count = con.execute(
     """
 SELECT
   user_name,
@@ -258,7 +260,7 @@ st.bar_chart(
     color="user_name",
 )
 
-modification_by_users = db.execute(
+modification_by_users = con.execute(
     """
 SELECT
   created_at,
@@ -327,7 +329,7 @@ st.area_chart(
 st.subheader("By File Analysis", divider=True)
 by_file_row = st.columns(3)
 
-most_open_files = db.execute(
+most_open_files = con.execute(
     """
 SELECT
   name,
@@ -360,7 +362,7 @@ with by_file_row[0]:
     st.dataframe(most_open_files, hide_index=True, column_order=["count", "name"])
 
 
-most_open_files_by_cmd = db.execute(
+most_open_files_by_cmd = con.execute(
     """
 SELECT
   name,
@@ -392,7 +394,7 @@ with by_file_row[1]:
     st.text("Most opened files by different command")
     st.dataframe(most_open_files_by_cmd, hide_index=True, column_order=["count", "name"])
 
-most_modified_files = db.execute(
+most_modified_files = con.execute(
     """
 SELECT
   name,
@@ -453,7 +455,7 @@ st.sidebar.header("Statistics", divider=True)
 
 # Open nodes
 
-open_nodes = db.execute(
+open_nodes = con.execute(
     """
 SELECT
   COUNT(*) AS count
@@ -474,7 +476,7 @@ st.sidebar.write("Opened nodes: ", open_nodes)
 
 # Open files
 
-open_files = db.execute(
+open_files = con.execute(
     """
 SELECT
   COUNT(DISTINCT file.name) AS count
@@ -495,7 +497,7 @@ st.sidebar.write("Opened files: ", open_files)
 
 # Modified files
 
-modified_files = db.execute(
+modified_files = con.execute(
     """
 SELECT
   COUNT(*) AS count
@@ -532,7 +534,7 @@ st.sidebar.write("Modified files: ", modified_files)
 
 # Modification size
 
-modification_size = db.execute(
+modification_size = con.execute(
     """
 SELECT
   ROUND(SUM(max_size - min_size) / (1024 * 1024), 2) AS write_mo

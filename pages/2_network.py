@@ -1,11 +1,12 @@
 from datetime import timedelta
 from timeit import default_timer as timer
+
 import streamlit as st
 
 from pages import connection
 
 start_timer = timer()
-db = connection("/Users/victormeyer/Dev/Self/rstracer/export/data/", "parquet")
+con = connection()
 
 st.set_page_config(
     page_title="Network Activity",
@@ -16,7 +17,7 @@ st.header("Network Activity", divider=True)
 
 # DATE SLIDE BAR
 
-(min_date, max_date) = db.execute(
+(min_date, max_date) = con.execute(
     """
     SELECT
         MIN(created_at) AS min_date_packet,
@@ -41,7 +42,7 @@ st.sidebar.header("Parameters", divider=True)
 # I/O network packet bytes
 
 st.subheader("I/O packet bytes", divider=True)
-packet_io = db.execute(
+packet_io = con.execute(
     """
 SELECT
     TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at) / 10) * 10) AS time,
@@ -62,7 +63,7 @@ protocols_size_row = st.columns(4)
 
 # Interfaces
 
-interface_by_size = db.execute(
+interface_by_size = con.execute(
     """
 SELECT
     interface,
@@ -80,7 +81,7 @@ with protocols_size_row[0]:
 
 # Network
 
-network_by_size = db.execute(
+network_by_size = con.execute(
     """
 SELECT
     COALESCE (network, 'unknown') AS network,
@@ -96,7 +97,7 @@ with protocols_size_row[1]:
 
 # Transport
 
-transport_by_size = db.execute(
+transport_by_size = con.execute(
     """
 SELECT
     COALESCE (transport, 'unknown') AS transport,
@@ -115,7 +116,7 @@ with protocols_size_row[2]:
 
 # Transport
 
-application_by_size = db.execute(
+application_by_size = con.execute(
     """
 SELECT
     COALESCE (application, 'unknown') AS application,
@@ -142,7 +143,7 @@ with protocols_size_row[3]:
 st.subheader("Foreign IP", divider=True)
 foreign_ip_column = st.columns(2, gap="large")
 
-foreign_ip_traffic = db.execute(
+foreign_ip_traffic = con.execute(
     """
 WITH ip AS
 (
@@ -198,7 +199,7 @@ Dot color white reflects the local host sent more packets to this IP than receiv
 st.subheader("Local IP", divider=True)
 local_ip_column = st.columns(2, gap="large")
 
-local_ip_traffic = db.execute(
+local_ip_traffic = con.execute(
     """
 WITH ip AS
 (
@@ -260,7 +261,7 @@ Dot color white reflects this local IP sent more packets than received (send=1).
 st.subheader("Local Port", divider=True)
 local_port_column = st.columns(2, gap="large")
 
-local_port_traffic = db.execute(
+local_port_traffic = con.execute(
     """
 WITH ip
 AS (
@@ -344,7 +345,7 @@ st.sidebar.header("Statistics", divider=True)
 
 # Packet count
 
-packet_count = db.execute(
+packet_count = con.execute(
     """
 SELECT
     COUNT(*) AS count
@@ -357,7 +358,7 @@ st.sidebar.write("Total packet: ", packet_count)
 
 # Packet size (Mo)
 
-packet_size = db.execute(
+packet_size = con.execute(
     """
 SELECT
     ROUND(SUM(length) / (1024 * 1024), 2) AS size
@@ -370,7 +371,7 @@ st.sidebar.write("Total size: ", packet_size, " Mo")
 
 # Listening port
 
-listening_port = db.execute(
+listening_port = con.execute(
     """
 SELECT
     COUNT(DISTINCT source_port) AS count
