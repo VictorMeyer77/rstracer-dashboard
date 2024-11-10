@@ -1,0 +1,11 @@
+pytest
+pytest-timeout
+coverage
+flake8
+black
+isort
+pytest-cov
+mypy
+mkdocs
+mkdocstrings
+mkdocstrings-python
