@@ -23,14 +23,14 @@ install:          ## Install the project in dev mode.
 
 .PHONY: fmt
 fmt:              ## Format code using black & isort.
-	$(ENV_PREFIX)isort pages/ rsdb.py
-	$(ENV_PREFIX)black -l 120 pages/ rsdb.py
+	$(ENV_PREFIX)isort pages/ rsdb.py setup.py
+	$(ENV_PREFIX)black -l 120 pages/ rsdb.py setup.py
 
 .PHONY: lint
 lint:             ## Run flake8, black, mypy linters.
-	$(ENV_PREFIX)flake8 --max-line-length 120 pages/ rsdb.py
-	$(ENV_PREFIX)black -l 120 --check pages/ rsdb.py
-	$(ENV_PREFIX)mypy --ignore-missing-imports pages/ rsdb.py
+	$(ENV_PREFIX)flake8 --max-line-length 120 pages/ rsdb.py setup.py
+	$(ENV_PREFIX)black -l 120 --check pages/ rsdb.py setup.py
+	$(ENV_PREFIX)mypy --ignore-missing-imports pages/ rsdb.py setup.py
 
 .PHONY: clean
 clean:            ## Clean unused files.
