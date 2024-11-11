@@ -72,6 +72,7 @@ def add_command_red_list(con, sidebar):
         SELECT
             DISTINCT command
         FROM gold_dim_process
+        WHERE command IS NOT NULL
         ORDER BY command
     """
     ).df()
