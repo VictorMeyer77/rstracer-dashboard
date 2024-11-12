@@ -93,7 +93,7 @@ packet_process = con.execute(
 SELECT
     TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM packet.created_at) / 10) * 10) AT TIME ZONE 'UTC' AS time,
     COALESCE(pro.command, 'Unknown') AS command,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_process_network net_pro
 INNER JOIN gold_fact_network_packet packet ON net_pro.packet_id = packet._id
 LEFT JOIN gold_dim_process pro ON net_pro.pid = pro.pid

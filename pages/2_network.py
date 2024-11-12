@@ -46,7 +46,7 @@ packet_io = con.execute(
     """
 SELECT
     TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at) / 10) * 10) AS time,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 GROUP BY time
@@ -67,7 +67,7 @@ interface_by_size = con.execute(
     """
 SELECT
     interface,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 GROUP BY interface
@@ -85,7 +85,7 @@ network_by_size = con.execute(
     """
 SELECT
     COALESCE (network, 'unknown') AS network,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 GROUP BY network
@@ -101,7 +101,7 @@ transport_by_size = con.execute(
     """
 SELECT
     COALESCE (transport, 'unknown') AS transport,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 AND network IS NOT NULL
@@ -120,7 +120,7 @@ application_by_size = con.execute(
     """
 SELECT
     COALESCE (application, 'unknown') AS application,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 AND transport IS NOT NULL
@@ -168,7 +168,7 @@ WITH ip AS
 SELECT
     HOST(address) AS address,
     COUNT(*) AS count,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size,
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size,
     AVG(send) AS send,
     TO_TIMESTAMP(AVG(EPOCH(created_at))) AS avg_date
 FROM ip
@@ -224,7 +224,7 @@ WITH ip AS
 SELECT
     HOST(address) AS address,
     COUNT(*) AS count,
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size,
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size,
     AVG(send) AS send,
     TO_TIMESTAMP(AVG(EPOCH(created_at))) AS avg_date
 FROM ip
@@ -303,7 +303,7 @@ AS (
 SELECT ip.port
     ,COALESCE(dim.command, 'Unknown') AS command
     ,COUNT(*) AS count
-    ,ROUND(SUM(ip.length) / (1024 * 1024), 2) AS size
+    ,ROUND(SUM(ip.length) / (1024 * 1024), 3) AS size
     ,AVG(ip.send) AS send
     ,TO_TIMESTAMP(AVG(EPOCH(ip.created_at))) AS avg_date
 FROM ip
@@ -361,7 +361,7 @@ st.sidebar.write("Total packet: ", packet_count)
 packet_size = con.execute(
     """
 SELECT
-    ROUND(SUM(length) / (1024 * 1024), 2) AS size
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?
 """,

@@ -537,7 +537,7 @@ st.sidebar.write("Modified files: ", modified_files)
 modification_size = con.execute(
     """
 SELECT
-  ROUND(SUM(max_size - min_size) / (1024 * 1024), 2) AS write_mo
+  ROUND(SUM(max_size - min_size) / (1024 * 1024), 3) AS write_mo
 FROM
 (
    SELECT
