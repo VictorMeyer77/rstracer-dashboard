@@ -144,7 +144,7 @@ SELECT
   created_at,
   command,
   SUM(
-    SIZE :: INTEGER - previous_size :: INTEGER
+    (size::BIGINT - previous_size::BIGINT)
   ) / (1024 * 1024) AS write_mo,
 FROM
 (
@@ -266,7 +266,7 @@ SELECT
   created_at,
   user,
   SUM(
-    SIZE :: INTEGER - previous_size :: INTEGER
+    SIZE::BIGINT - previous_size::BIGINT
   ) / (1024 * 1024) AS write_mo,
 FROM
 (
