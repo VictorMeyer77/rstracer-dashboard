@@ -36,16 +36,13 @@ st.sidebar.header("Parameters", divider=True)
     step=timedelta(seconds=1),
 )
 
-
-# RED LIST
-
 # I/O network packet bytes
 
 st.subheader("I/O packet bytes", divider=True)
 packet_io = con.execute(
     """
 SELECT
-    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at) / 10) * 10) AS time,
+    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at))) AS time,
     ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_network_packet
 WHERE created_at >= ? AND created_at <= ?

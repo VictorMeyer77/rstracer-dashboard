@@ -49,10 +49,10 @@ hide_command = add_command_red_list(con, st.sidebar)
 resource_per_command = con.execute(
     """
 SELECT
-    SUM(fact.pcpu) AS pcpu,
-    SUM(fact.pmem) AS pmem,
-    COALESCE(pro.command, 'Unknown') AS command,
-    fact.created_at
+    MAX(fact.pcpu) AS pcpu,
+    MAX(fact.pmem) AS pmem,
+    COALESCE(pro.command, pro.full_command) AS command,
+    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM fact.created_at))) AT TIME ZONE 'UTC' AS time,
 FROM
     gold_fact_process fact
 LEFT JOIN
@@ -64,20 +64,20 @@ WHERE
 AND pro.pid NOT IN ?
 AND  usr.name NOT IN ?
 AND pro.command NOT IN ?
-GROUP BY fact.created_at, pro.command
-ORDER BY fact.created_at
+GROUP BY time, COALESCE(pro.command, pro.full_command)
+ORDER BY time
 """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
 ).df()
 
 st.subheader("CPU Usage by Command", divider=True)
 st.area_chart(
-    resource_per_command, x="created_at", y="pcpu", color="command", stack="center", x_label="date", y_label="CPU usage"
+    resource_per_command, x="time", y="pcpu", color="command", stack="center", x_label="date", y_label="CPU usage"
 )
 st.subheader("Memory Usage by Command", divider=True)
 st.area_chart(
     resource_per_command,
-    x="created_at",
+    x="time",
     y="pmem",
     color="command",
     stack="center",
@@ -91,8 +91,8 @@ st.subheader("Network I/O by Command", divider=True)
 packet_process = con.execute(
     """
 SELECT
-    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM packet.created_at) / 10) * 10) AT TIME ZONE 'UTC' AS time,
-    COALESCE(pro.command, 'Unknown') AS command,
+    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM packet.created_at))) AT TIME ZONE 'UTC' AS time,
+    COALESCE(pro.command, pro.full_command) AS command,
     ROUND(SUM(length) / (1024 * 1024), 3) AS size
 FROM gold_fact_process_network net_pro
 INNER JOIN gold_fact_network_packet packet ON net_pro.packet_id = packet._id
@@ -102,7 +102,7 @@ WHERE packet.created_at >= ? AND packet.created_at <= ?
 AND pro.pid NOT IN ?
 AND usr.name NOT IN ?
 AND pro.command NOT IN ?
-GROUP BY time, command
+GROUP BY time, COALESCE(pro.command, pro.full_command)
 ORDER BY time
 """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
@@ -130,7 +130,7 @@ WITH process AS
 (
     SELECT DISTINCT
         fact.pid,
-        pro.command
+        COALESCE(command, full_command) AS command
     FROM
         gold_fact_process fact
     LEFT JOIN
@@ -144,7 +144,7 @@ WITH process AS
     AND pro.command NOT IN ?
 )
 SELECT
-    COALESCE(command, 'Unknwon') AS command,
+    command,
     COUNT(*) AS count
 FROM process
 GROUP BY command
@@ -221,15 +221,14 @@ WITH ppid_count AS
     FROM
         gold_fact_process fact
     LEFT JOIN
-        gold_dim_process pro ON fact.pid = pro.pid
+        gold_dim_process dim ON fact.pid = dim.pid
     LEFT JOIN
-        gold_file_user usr ON pro.uid = usr.uid
-    LEFT JOIN gold_dim_process dim ON fact.pid = dim.pid
+        gold_file_user usr ON dim.uid = usr.uid
     WHERE
         fact.created_at >= ? AND fact.created_at <= ?
-    AND pro.pid NOT IN ?
+    AND fact.pid NOT IN ?
     AND usr.name NOT IN ?
-    AND pro.command NOT IN ?
+    AND dim.command NOT IN ?
     GROUP BY dim.ppid
 )
 SELECT
@@ -254,20 +253,19 @@ pids_per_age = con.execute(
     """
 SELECT DISTINCT
     fact.pid,
-    pro.command,
+    dim.command,
     AGE(dim.inserted_at, dim.started_at) AS age,
 FROM
     gold_fact_process fact
 LEFT JOIN
-    gold_dim_process pro ON fact.pid = pro.pid
+    gold_dim_process dim ON fact.pid = dim.pid
 LEFT JOIN
-    gold_file_user usr ON pro.uid = usr.uid
-LEFT JOIN gold_dim_process dim ON fact.pid = dim.pid
+    gold_file_user usr ON dim.uid = usr.uid
 WHERE
     fact.created_at >= ? AND fact.created_at <= ?
-AND pro.pid NOT IN ?
+AND fact.pid NOT IN ?
 AND usr.name NOT IN ?
-AND pro.command NOT IN ?
+AND dim.command NOT IN ?
 ORDER BY age DESC
 LIMIT 20
 """,
@@ -284,20 +282,19 @@ full_commands_count = con.execute(
     """
 SELECT DISTINCT
     COUNT(DISTINCT fact.pid) AS count,
-    pro.full_command
+    dim.full_command
 FROM
     gold_fact_process fact
 LEFT JOIN
-    gold_dim_process pro ON fact.pid = pro.pid
+    gold_dim_process dim ON fact.pid = dim.pid
 LEFT JOIN
-    gold_file_user usr ON pro.uid = usr.uid
-LEFT JOIN gold_dim_process dim ON fact.pid = dim.pid
+    gold_file_user usr ON dim.uid = usr.uid
 WHERE
     fact.created_at >= ? AND fact.created_at <= ?
-AND pro.pid NOT IN ?
+AND fact.pid NOT IN ?
 AND usr.name NOT IN ?
-AND pro.command NOT IN ?
-GROUP BY pro.full_command
+AND dim.command NOT IN ?
+GROUP BY dim.full_command
 ORDER BY count DESC
 LIMIT 20
 """,
@@ -321,15 +318,14 @@ SELECT
 FROM
     gold_fact_process fact
 LEFT JOIN
-    gold_dim_process pro ON fact.pid = pro.pid
+    gold_dim_process dim ON fact.pid = dim.pid
 LEFT JOIN
-    gold_file_user usr ON pro.uid = usr.uid
-LEFT JOIN gold_dim_process dim ON fact.pid = dim.pid
+    gold_file_user usr ON dim.uid = usr.uid
 WHERE
     fact.created_at >= ? AND fact.created_at <= ?
-AND pro.pid NOT IN ?
+AND fact.pid NOT IN ?
 AND usr.name NOT IN ?
-AND pro.command NOT IN ?
+AND dim.command NOT IN ?
 """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
 ).fetchone()[0]
@@ -345,15 +341,14 @@ SELECT
 FROM
     gold_fact_process fact
 LEFT JOIN
-    gold_dim_process pro ON fact.pid = pro.pid
+    gold_dim_process dim ON fact.pid = dim.pid
 LEFT JOIN
-    gold_file_user usr ON pro.uid = usr.uid
-LEFT JOIN gold_dim_process dim ON fact.pid = dim.pid
+    gold_file_user usr ON dim.uid = usr.uid
 WHERE
     fact.created_at >= ? AND fact.created_at <= ?
-AND pro.pid NOT IN ?
+AND fact.pid NOT IN ?
 AND usr.name = 'root'
-AND pro.command NOT IN ?
+AND dim.command NOT IN ?
 """,
     [slider_date_min, slider_date_max, hide_pid, hide_command],
 ).fetchone()[0]

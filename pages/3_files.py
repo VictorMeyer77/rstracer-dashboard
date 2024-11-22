@@ -45,7 +45,7 @@ hide_user = add_user_red_list(con, st.sidebar)
 hide_pid = add_pid_red_list(con, st.sidebar)
 hide_command = add_command_red_list(con, st.sidebar)
 
-# Open files partition by 5 secs
+# Open files Count
 
 st.subheader("File Activity", divider=True)
 open_files_chart_row = st.columns(2)
@@ -54,7 +54,7 @@ files_count = con.execute(
     """
 SELECT
   COUNT(DISTINCT dim.name) AS count,
-  created_at
+  TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at))) AT TIME ZONE 'UTC' AS time,
 FROM
   gold_fact_file_reg fact
   LEFT JOIN gold_dim_process pro ON fact.pid = pro.pid
@@ -67,15 +67,15 @@ WHERE
   AND usr.name NOT IN ?
   AND pro.command NOT IN ?
 GROUP BY
-  created_at
+  time
 ORDER BY
-  created_at
+  time
 """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
 ).df()
 
 st.text("Open files total")
-st.line_chart(data=files_count, x="created_at", y="count", x_label="date", y_label="count")
+st.line_chart(data=files_count, x="time", y="count", x_label="date", y_label="count")
 
 
 # File by command
@@ -118,8 +118,6 @@ FROM
       user_name,
       file_name
   )
-WHERE
-  min_size <> max_size
 GROUP BY
  command
 ORDER BY
@@ -141,7 +139,7 @@ st.bar_chart(
 modification_by_commands = con.execute(
     """
 SELECT
-  created_at,
+  TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at))) AT TIME ZONE 'UTC' AS time,
   command,
   SUM(
     (size::BIGINT - previous_size::BIGINT)
@@ -181,10 +179,10 @@ WHERE
   SIZE <> previous_size
   AND row_num > 1
 GROUP BY
- created_at,
+ time,
  command
 ORDER BY
- created_at
+ time
   """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
 ).df()
@@ -193,7 +191,7 @@ ORDER BY
 st.text("Modification Size (Mo) by command")
 st.area_chart(
     modification_by_commands,
-    x="created_at",
+    x="time",
     y="write_mo",
     color="command",
     stack="center",
@@ -263,7 +261,7 @@ st.bar_chart(
 modification_by_users = con.execute(
     """
 SELECT
-  created_at,
+  TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM created_at))) AT TIME ZONE 'UTC' AS time,
   user,
   SUM(
     SIZE::BIGINT - previous_size::BIGINT
@@ -303,10 +301,10 @@ WHERE
   SIZE <> previous_size
   AND row_num > 1
 GROUP BY
- created_at,
+ time,
  user
 ORDER BY
- created_at
+ time
   """,
     [slider_date_min, slider_date_max, hide_pid, hide_user, hide_command],
 ).df()
@@ -315,7 +313,7 @@ ORDER BY
 st.text("Modification Size (Mo) by user")
 st.area_chart(
     modification_by_users,
-    x="created_at",
+    x="time",
     y="write_mo",
     color="user",
     stack="center",
@@ -519,11 +517,7 @@ FROM
      AND pro.pid NOT IN ?
      AND usr.name NOT IN ?
      AND pro.command NOT IN ?
-   GROUP BY
-      fact.pid,
-     fact.fd,
-     fact.node,
-     file.name,
+   GROUP BY file.name
      )
 WHERE
   max_size <> min_size
