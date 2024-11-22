@@ -14,6 +14,8 @@ SOCKET_COLOR = "#FF6E6E"
 EDGE_COLOR = "#82EFFF"
 FOREIGN_HOST_COLOR = "#FFFF85"
 
+MAX_DISTINCT_COMMAND_BY_CHILD = 5
+
 start_timer = timer()
 con = connection()
 
@@ -22,7 +24,7 @@ st.set_page_config(
     page_icon="📄",
     layout="wide",
 )
-st.header("Dive in command history", divider=True)
+st.header("Dive in your command history", divider=True)
 
 # Process selection
 
@@ -79,44 +81,10 @@ class Process:
     def add_node(self, graph):
         command = self.full_command if len(self.full_command) < 100 else self.full_command[:100] + "..."
         label = f"""pid: {self.pid}
-uid: {self.user}
+user: {self.user}
 command: {command}
 {self.started_at} -> {self.inserted_at}"""
         graph.node(str(self.id), label, shape="rectangle", color=PROCESS_COLOR, style="filled")
-
-
-class ChildProcess:
-
-    def __init__(self, process_tuple):
-        self.id = str(hash(str(process_tuple[0]) + str(process_tuple[1]) + str(process_tuple[2])))
-        self.full_command = process_tuple[0]
-        self.pids = process_tuple[1]
-        self.users = process_tuple[2]
-        self.started_at = process_tuple[3]
-        self.inserted_at = process_tuple[4]
-
-    def __str__(self):
-        return (
-            f"ChildProcess(id={self.id}, full_command='{self.full_command}',"
-            f"pids={self.pids}, "
-            f"users='{self.users}', "
-            f"started_at={self.started_at}, inserted_at={self.inserted_at})"
-        )
-
-    def add_node(self, graph):
-        command = self.full_command if len(self.full_command) < 100 else self.full_command[:100] + "..."
-        label = f"""command: {command}
-occurence: {len(self.pids)}
-uids: {self.users}
-{self.started_at} -> {self.inserted_at}"""
-        graph.node(
-            str(self.id),
-            label,
-            shape="rectangle",
-            color=PROCESS_COLOR,
-            style="filled",
-            fillcolor=PROCESS_COLOR,
-        )
 
 
 class File:
@@ -192,28 +160,6 @@ def get_process_by_pid(pid):
     return Process(process) if process is not None else None
 
 
-def get_processes_by_command(command):
-    process_buffer = []
-    processes = con.execute(
-        """
-    SELECT
-        HASH(pro.pid, started_at) AS _id,
-        pro.pid,
-        pro.ppid,
-        usr.name AS user,
-        pro.full_command,
-        pro.started_at,
-        pro.inserted_at,
-    FROM gold_dim_process pro
-    LEFT JOIN gold_file_user usr ON usr.uid = pro.uid
-    WHERE pro.command = ?""",
-        [command],
-    ).df()
-    for row in processes.itertuples(index=False, name=None):
-        process_buffer.append(Process(row))
-    return process_buffer
-
-
 def get_processes_by_ppid(ppid):
     process_buffer = []
     processes = con.execute(
@@ -228,45 +174,13 @@ def get_processes_by_ppid(ppid):
         pro.inserted_at,
     FROM gold_dim_process pro
     LEFT JOIN gold_file_user usr ON usr.uid = pro.uid
-    WHERE pro.ppid = ?""",
+    WHERE pro.ppid = ?
+    ORDER BY pro.started_at ASC""",
         [str(ppid)],
     ).df()
     for row in processes.itertuples(index=False, name=None):
         process_buffer.append(Process(row))
     return process_buffer
-
-
-def get_children_process(pid):
-    child_process_buffer = []
-    processes = con.execute(
-        """
-    SELECT
-        full_command,
-        LIST(DISTINCT pid) AS pids,
-        STRING_AGG(DISTINCT USER, ',') AS users,
-        MIN(started_at) AS started_at,
-        MAX(inserted_at) AS insterted_at,
-    FROM
-    (
-        SELECT
-            HASH(pro.pid, started_at) AS _id,
-            pro.pid,
-            pro.ppid,
-            usr.name AS user,
-            pro.full_command,
-            pro.started_at,
-            pro.inserted_at,
-        FROM gold_dim_process pro
-        LEFT JOIN gold_file_user usr ON usr.uid = pro.uid
-        WHERE pro.ppid = ?
-    )
-    GROUP BY full_command
-    """,
-        [str(pid)],
-    ).df()
-    for row in processes.itertuples(index=False, name=None):
-        child_process_buffer.append(ChildProcess(row))
-    return child_process_buffer
 
 
 def get_open_files_by_process(pid):
@@ -380,19 +294,31 @@ def add_ancestor(process, graph):
         add_ancestor(parent, graph)
 
 
-def add_descendant(node_id, pid, graph):
+def add_descendant(node_id, pid, graph, process_node_buffer):
     last_process_id = ""
-    children = get_children_process(pid)
+    children = get_processes_by_ppid(pid)
+    cut_commands = []
     for child in children:
-        child.add_node(graph)
-        graph.edge(node_id, child.id, color=EDGE_COLOR)
-        if last_process_id != "":
-            graph.edge(last_process_id, child.id, color=BACKGROUND_COLOR)
-        last_process_id = child.id
-        for pid in child.pids:
-            add_open_file(child.id, pid, graph)
-            add_open_socket(child.id, pid, graph)
-            add_descendant(child.id, pid, graph)
+        if (
+            len([p for p in process_node_buffer if p.full_command == child.full_command and p.ppid == child.ppid])
+            > MAX_DISTINCT_COMMAND_BY_CHILD
+        ):
+            cut_commands.append(child.full_command)
+        else:
+            child.add_node(graph)
+            graph.edge(node_id, child.id, color=EDGE_COLOR)
+            if last_process_id != "":
+                graph.edge(last_process_id, child.id, color=BACKGROUND_COLOR)
+            last_process_id = child.id
+            add_open_file(child.id, child.pid, graph)
+            add_open_socket(child.id, child.pid, graph)
+            add_descendant(child.id, child.pid, graph, process_node_buffer)
+        process_node_buffer.append(child)
+    for command in set(cut_commands):
+        occurence = len([c for c in cut_commands if c == command]) + MAX_DISTINCT_COMMAND_BY_CHILD
+        st.sidebar.warning(
+            f"Command '{command}' with PPID {pid} was launched {occurence} times. Showing only the first 5."
+        )
 
 
 def add_open_file(node_id, pid, graph):
@@ -417,20 +343,21 @@ def add_open_socket(node_id, pid, graph):
             graph.edge(last_socket_id, socket.id, color=BACKGROUND_COLOR)
         last_socket_id = socket.id
         for foreign_host_node in get_foreign_host_by_port(socket.port, pid):
-            foreign_host_node.add_node(graph)
-            graph.edge(socket.id, foreign_host_node.id, color=EDGE_COLOR, dir="both")
+            if foreign_host_node.id not in graph.source:
+                foreign_host_node.add_node(graph)
+                graph.edge(socket.id, foreign_host_node.id, color=EDGE_COLOR, dir="both")
 
 
 graph = graphviz.Digraph(format="png")
 graph.attr(bgcolor=BACKGROUND_COLOR)
 
+process_node_buffer: list[Process] = []
 process = get_process_by_pid(pid)
 process.add_node(graph)
 add_open_file(process.id, process.pid, graph)
 add_open_socket(process.id, pid, graph)
 add_ancestor(process, graph)
-add_descendant(process.id, process.pid, graph)
-
+add_descendant(process.id, process.pid, graph, process_node_buffer)
 
 st.graphviz_chart(graph)
 save_and_open = st.button("Open in explorer 🔎")
