@@ -8,6 +8,7 @@ TABLES = [
     "gold_dim_network_local_ip",
     "gold_dim_network_open_port",
     "gold_dim_network_socket",
+    "gold_dim_network_host",
     "gold_dim_process",
     "gold_fact_file_reg",
     "gold_fact_network_ip",
