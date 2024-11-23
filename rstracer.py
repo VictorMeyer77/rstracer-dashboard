@@ -1,12 +1,13 @@
 import subprocess
 from time import sleep
+from typing import Dict, Type
 
 import psutil
 
 
 class SingletonMeta(type):
 
-    _instances = {}
+    _instances: Dict[Type, object] = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
@@ -15,7 +16,6 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-        # ..
 class Rstracer(metaclass=SingletonMeta):
 
     def __init__(self, path="rstracer"):
