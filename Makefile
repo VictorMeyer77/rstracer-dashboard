@@ -48,6 +48,9 @@ clean:            ## Clean unused files.
 	@rm -rf .tox/
 	@rm -rf docs/_build
 	@rm -rf .output/
+	@rm -rf *.log
+	@rm -rf *.db
+	@rm -rf *.wal
 
 .PHONY: virtualenv
 virtualenv:       ## Create a virtual environment.
