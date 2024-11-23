@@ -1,0 +1,114 @@
+# Configuration File for rstracer
+
+# If a rstracer.toml exists in the workspace, the programs will use it, else a default configuration will be applied.
+
+# If set to true, the database is stored in memory ("in-memory" mode), which offers higher performance,
+# but the data is not accessible outside the running process. You can only request your data with the export parquet or csv.
+# If set to false, the database is stored in a file named "rstracer.db".
+# This option is less performant but allows querying the file after the process ends.
+in_memory = true
+
+# [Vacuum Task]
+# The vacuum task deletes rows from tables where data insertion is older than X seconds.
+# There is a trade-off between keeping historical data and maintaining performance. Larger tables
+# can lead to slower query times. For bronze and silver layers, we recommend maintaining a short
+# retention period, as gold tables should be the primary target for querying.
+# Note: In "in-memory" mode, retaining large amounts of data can lead to memory issues.
+# Set a value of 0 to disable vacuum for a specific layer.
+[vacuum]
+bronze = 15   # Retention period in seconds for bronze layer
+silver = 15   # Retention period in seconds for silver layer
+gold = 300    # Retention period in seconds for gold layer
+
+# [Scheduling Tasks]
+# Once data from the `ps`, `lsof`, and network packet commands is inserted into the bronze layer,
+# scheduled tasks are executed periodically for silver, gold, vacuum, and file tasks.
+# - **Silver**: Extracts, transforms, and loads (ETL) data from the bronze layer.
+# - **Gold**: ETL process from the silver layer.
+# - **Vacuum**: Executes the vacuum tasks as defined above.
+# - **File**: File tables contain auxiliary information such as data from `/etc/hosts` or `/etc/services`.
+# - **Export**: Export gold tables to parquet or csv output. To disable export, set 0.
+#   They are loaded at the beginning of the run and don’t need regular updates.
+[schedule]
+silver = 5        # Frequency in seconds to run the silver task
+gold = 5          # Frequency in seconds to run the gold task
+vacuum = 15       # Frequency in seconds to run the vacuum task
+file = 300        # Frequency in seconds to run the file task
+export = 5       # Frequency in seconds to run the file task
+
+# [Request Channel]
+# DuckDB does not allow concurrent writes. All requests are queued in a channel, which is processed sequentially
+# by a dedicated thread. The following configuration defines the behavior of this channel:
+# - `channel_size`: The maximum number of requests stored in the queue. A value higher than 100 is not recommended.
+# - If the channel is often full, consider decreasing input frequencies (like for `ps` or `lsof`) or
+#   decreasing schedule task frequencies (such as silver or gold).
+# - `consumer_batch_size`: Number of requests executed in a single DuckDB batch.
+[request]
+channel_size = 100           # Maximum number of requests in the queue
+consumer_batch_size = 20     # Number of requests executed per batch
+
+# [Process Monitor (`ps` command)]
+# The `ps` command lists active processes.
+# - `producer_frequency`: The number of milliseconds to wait between two `ps` command executions.
+# - `consumer_batch_size`: Number of rows per batch in the `VALUES` section of an `INSERT INTO` statement.
+#   A value around 200 is recommended.
+[ps]
+producer_frequency = 1000    # Time interval (in milliseconds) between consecutive executions of `ps`
+consumer_batch_size = 200    # Rows per batch in the `INSERT INTO` statements
+
+# [File Monitor (`lsof` command)]
+# The `lsof` command lists all open files. To manage the output volume, results are filtered to include only network and regular files.
+# `lsof` network files produce fewer lines, but they are essential for network analysis. In contrast, `lsof` on the root directory (`/`) produces many more lines, which are less useful for this purpose.
+# Therefore, separate configurations have been created for each type.
+# - `producer_frequency`: The time interval, in milliseconds, between consecutive executions of `lsof`.
+# - `consumer_batch_size`: The number of rows per batch for the `VALUES` section in an `INSERT INTO` statement.
+#   A recommended value is around 200.
+
+[lsof.regular]
+producer_frequency = 10000   # Time interval (in milliseconds) between consecutive executions of `lsof /`
+consumer_batch_size = 200    # Number of rows per batch in `INSERT INTO` statements
+
+[lsof.network]
+producer_frequency = 1000    # Time interval (in milliseconds) between consecutive executions of `lsof -i`
+consumer_batch_size = 200    # Number of rows per batch in `INSERT INTO` statements
+
+# [Network Packet Capture]
+# A thread listens to all open interfaces and writes full packet objects to a queue. Another thread
+# reads this queue and splits each packet into requests for different tables (ethernet, ipv4, etc.).
+# - `channel_size`: Maximum size of the packet queue.
+# - `producer_frequency`: Number of milliseconds between consecutive queue reads.
+# - `consumer_batch_size`: Number of packets read per batch.
+[network]
+channel_size = 500           # Maximum number of packets in the queue
+producer_frequency = 1000    # Time interval (in milliseconds) between consecutive reads from the queue
+consumer_batch_size = 200    # Packets read per batch
+
+# [Export Task]
+# Configuration for exporting "gold" tables to either parquet or CSV files.
+# - `directory`: The directory where the output files will be stored. If it does not exist, it will be created automatically.
+# - `format`: Specifies the export file format. Accepted values are "parquet" or "csv".
+[export]
+directory = ".output/rstracer/"        # Output directory
+format = "parquet"            # Output format, accepted "parquet" or "csv"
+
+# [Logger]
+# Configuration for application logging settings.
+# - `level`: Specifies the logging level for the application. Accepted values are:
+#  - "TRACE"
+#  - "DEBUG"
+#  - "INFO"
+#  - "WARN"
+#  - "ERROR"
+# - `directory`: The directory where log files will be stored.
+#   If the directory does not exist:
+#    - It will be created automatically if valid.
+#    - If left empty or invalid, no logging files will be created.
+# - `rotation`: Specifies the log file rotation policy. Accepted values are:
+#  - "MINUTELY"
+#  - "HOURLY"
+#  - "DAILY"
+# Default is "HOURLY".
+[logger]
+level = "INFO"                # Logging level
+directory = "./.output/log/"   # Output directory for log files
+rotation = "HOURLY"           # Log rotation policy
