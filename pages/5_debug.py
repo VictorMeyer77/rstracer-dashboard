@@ -176,5 +176,6 @@ st.write(
 
 # Running time
 
+st.sidebar.header("Statistics", divider=True)
 end_timer = timer()
 st.sidebar.write("Running time: ", round(end_timer - start_timer, 4), " seconds")
