@@ -51,7 +51,7 @@ def run():
             with live_column[1]:
                 progress_bar = st.progress(0, text="Initializing...")
                 for percent_complete in range(100):
-                    sleep(0.07)
+                    sleep(0.20)
                     progress_bar.progress(percent_complete, text="Initializing...")
             progress_bar.progress(100, text="Ready !")
 

@@ -23,8 +23,11 @@ class Rstracer(metaclass=SingletonMeta):
         self.process = None
 
     def __del__(self):
-        if self.state() == "Running":
-            self.stop()
+        try:
+            if self.state() == "Running":
+                self.stop()
+        except ImportError:
+            pass
 
     def launch(self):
         if not self.state() == "Running":
