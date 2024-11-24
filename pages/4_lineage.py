@@ -267,10 +267,11 @@ INNER JOIN gold_dim_network_socket soc
 ON         soc.source_port = ip_traffic.port
 AND        ip_traffic.created_at >= soc.started_at
 AND        ip_traffic.created_at <= soc.inserted_at
-WHERE      ip_traffic.address IN
+WHERE      HOST(ip_traffic.address::INET) IN
            (
-                  SELECT address
-                  FROM   gold_dim_network_local_ip
+                  SELECT host.host
+                  FROM gold_dim_network_interface int
+                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
            )
 AND        ip_traffic.port = ?
 AND        soc.pid = ?

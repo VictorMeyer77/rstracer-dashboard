@@ -53,6 +53,37 @@ ORDER BY time
 ).df()
 st.area_chart(data=packet_io, x="time", y="size", stack="center", x_label="date", y_label="size (Mo)")
 
+# Process by network
+st.subheader("Network I/O by Command", divider=True)
+
+packet_process = con.execute(
+    """
+SELECT
+    TO_TIMESTAMP(FLOOR(EXTRACT('epoch' FROM packet.created_at))) AT TIME ZONE 'UTC' AS time,
+    COALESCE(pro.command, pro.full_command) AS command,
+    ROUND(SUM(length) / (1024 * 1024), 3) AS size
+FROM gold_fact_process_network net_pro
+INNER JOIN gold_fact_network_packet packet ON net_pro.packet_id = packet._id
+LEFT JOIN gold_dim_process pro ON net_pro.pid = pro.pid
+LEFT JOIN gold_file_user usr ON pro.uid = usr.uid
+WHERE packet.created_at >= ? AND packet.created_at <= ?
+GROUP BY time, COALESCE(pro.command, pro.full_command)
+ORDER BY time
+""",
+    [slider_date_min, slider_date_max],
+).df()
+
+st.area_chart(
+    data=packet_process,
+    x="time",
+    y="size",
+    color="command",
+    stack="center",
+    x_label="date",
+    y_label="size (Mo)",
+)
+
+
 # Protocols by size
 
 st.subheader("Protocols repartition by size", divider=True)
@@ -202,20 +233,28 @@ WITH ip AS
 (
     SELECT
         fact.created_at,
-        COALESCE(fip1.address, fip2.address)::INET AS address,
+        COALESCE(fip1.host, fip2.host)::INET AS address,
         CASE
-            WHEN fip1.address IS NULL THEN 0
-            WHEN fip2.address IS NULL THEN 1
+            WHEN fip1.host IS NULL THEN 0
+            WHEN fip2.host IS NULL THEN 1
         END AS send,
         pack.length,
     FROM gold_fact_network_ip fact
-    LEFT JOIN (SELECT  address FROM  gold_dim_network_local_ip) fip1
-    ON fact.source_address = fip1.address
-    LEFT JOIN (SELECT  address FROM  gold_dim_network_local_ip) fip2
-    ON fact.destination_address = fip2.address
+    LEFT JOIN (
+                  SELECT host.host
+                  FROM gold_dim_network_interface int
+                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
+           ) fip1
+    ON HOST(fact.source_address::INET) = fip1.host
+    LEFT JOIN (
+                  SELECT host.host
+                  FROM gold_dim_network_interface int
+                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
+           ) fip2
+    ON HOST(fact.destination_address::INET) = fip2.host
     LEFT JOIN gold_fact_network_packet pack ON fact._id = pack._id
-    WHERE NOT (fip1.address IS NULL AND fip2.address IS NULL)
-    AND NOT (fip1.address IS NOT NULL AND fip2.address IS NOT NULL)
+    WHERE NOT (fip1.host IS NULL AND fip2.host IS NULL)
+    AND NOT (fip1.host IS NOT NULL AND fip2.host IS NOT NULL)
     AND fact.created_at >= ? AND fact.created_at <= ?
 )
 SELECT
@@ -264,36 +303,40 @@ WITH ip
 AS (
     SELECT fact.created_at
         ,CASE
-            WHEN fip1.address IS NULL
+            WHEN fip1.host IS NULL
                 THEN fact.destination_port
-            WHEN fip2.address IS NULL
+            WHEN fip2.host IS NULL
                 THEN fact.source_port
             END AS port
         ,CASE
-            WHEN fip1.address IS NULL
+            WHEN fip1.host IS NULL
                 THEN 0
-            WHEN fip2.address IS NULL
+            WHEN fip2.host IS NULL
                 THEN 1
             END AS send
         ,pack.length
         ,
     FROM gold_fact_network_ip fact
     LEFT JOIN (
-        SELECT address
-        FROM gold_dim_network_local_ip
-        ) fip1 ON fact.source_address = fip1.address
+                  SELECT host.host
+                  FROM gold_dim_network_interface int
+                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
+           ) fip1
+    ON HOST(fact.source_address::INET) = fip1.host
     LEFT JOIN (
-        SELECT address
-        FROM gold_dim_network_local_ip
-        ) fip2 ON fact.destination_address = fip2.address
+                  SELECT host.host
+                  FROM gold_dim_network_interface int
+                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
+        ) fip2
+    ON HOST(fact.destination_address::INET) = fip2.host
     LEFT JOIN gold_fact_network_packet pack ON fact._id = pack._id
     WHERE NOT (
-            fip1.address IS NULL
-            AND fip2.address IS NULL
+            fip1.host IS NULL
+            AND fip2.host IS NULL
             )
         AND NOT (
-            fip1.address IS NOT NULL
-            AND fip2.address IS NOT NULL
+            fip1.host IS NOT NULL
+            AND fip2.host IS NOT NULL
             )
         AND fact.created_at >= ? AND fact.created_at <= ?
     )

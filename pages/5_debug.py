@@ -105,14 +105,20 @@ network_consistency_column = st.columns(2)
 
 foreign_ip_packet_without_process = con.execute(
     """
-WITH foreign_ip_without_process AS
+WITH local_ip AS
+(
+    SELECT host.host
+    FROM gold_dim_network_interface int
+    LEFT JOIN gold_dim_network_host host ON host.address = int.address
+),
+foreign_ip_without_process AS
 (
     SELECT ip.*
     FROM gold_fact_network_ip ip
     LEFT JOIN gold_fact_process_network pro_net ON ip._id = pro_net.packet_id
     WHERE pro_net.send IS NULL
-    AND NOT(HOST(ip.source_address::INET) IN (SELECT HOST(address::INET) FROM gold_dim_network_local_ip) AND
-     HOST(ip.destination_address::INET) IN (SELECT HOST(address::INET) FROM gold_dim_network_local_ip))
+    AND NOT HOST(ip.source_address::INET) IN (SELECT host FROM local_ip)
+    AND HOST(ip.destination_address::INET) IN (SELECT host FROM local_ip)
 )
 SELECT
     HOST(foreign_packet.address::INET) AS address,
@@ -126,14 +132,14 @@ FROM
         destination_address AS address,
         source_port AS port,
     FROM foreign_ip_without_process
-    WHERE HOST(source_address::INET) IN (SELECT HOST(address::INET) FROM gold_dim_network_local_ip)
+    WHERE HOST(source_address::INET) IN (SELECT host FROM local_ip)
     UNION ALL
     SELECT
         _id,
         source_address AS address,
         destination_port AS port,
     FROM foreign_ip_without_process
-    WHERE HOST(destination_address::INET) IN (SELECT HOST(address::INET) FROM gold_dim_network_local_ip)
+    WHERE HOST(destination_address::INET) IN (SELECT host FROM local_ip)
 ) foreign_packet
 LEFT JOIN gold_fact_network_packet fact_packet ON fact_packet._id = foreign_packet._id
 GROUP BY

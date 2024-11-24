@@ -5,7 +5,7 @@ import duckdb
 TABLES = [
     "gold_dim_file_reg",
     "gold_dim_network_foreign_ip",
-    "gold_dim_network_local_ip",
+    "gold_dim_network_interface",
     "gold_dim_network_open_port",
     "gold_dim_network_socket",
     "gold_dim_network_host",
