@@ -222,11 +222,11 @@ def get_open_sockets_by_process(pid):
         FROM
         (
             SELECT DISTINCT
-                COALESCE(source_port::TEXT, '*') AS port,
-                COALESCE(HOST(source_address::INET), '*') AS address
-            FROM gold_dim_network_socket
-            WHERE pid = ?
-            AND source_address != '::1'::INET
+                COALESCE(soc.source_port::TEXT, '*') AS port,
+                host.host AS address
+            FROM gold_dim_network_socket soc
+            INNER JOIN gold_dim_network_host host ON soc.source_address = host.address
+            WHERE soc.pid = ?
         )
         GROUP BY port
     """,
@@ -241,38 +241,49 @@ def get_foreign_host_by_port(port, pid):
     foreign_host_buffer = []
     foreign_host = con.execute(
         """
-WITH ip_traffic AS
+WITH fact_ip_host AS
+(
+    SELECT
+     fact.*,
+     host1.host AS source_host,
+     host2.host AS destination_host
+    FROM gold_fact_network_ip fact
+    LEFT JOIN gold_dim_network_host host1 ON fact.source_address = host1.address
+    LEFT JOIN gold_dim_network_host host2 ON fact.destination_address = host2.address
+),
+ip_traffic AS
 (
        SELECT _id,
-              source_address AS address,
+              source_host AS address,
               source_port    AS port,
-              destination_address AS foreign_address,
+              destination_host AS foreign_address,
               created_at,
               inserted_at
-       FROM   gold_fact_network_ip
+       FROM   fact_ip_host
        UNION ALL
        SELECT _id,
-              destination_address AS address,
+              destination_host AS address,
               destination_port    AS port,
-              source_address AS foreign_address,
+              source_host AS foreign_address,
               created_at,
               inserted_at
-       FROM   gold_fact_network_ip
+       FROM   fact_ip_host
+),
+interface_host AS
+(
+    SELECT host.host
+    FROM gold_dim_network_interface int
+    LEFT JOIN gold_dim_network_host host ON host.address = int.address
 )
 SELECT
-    HOST(ip_traffic.foreign_address::INET) AS foreign_address,
+    ip_traffic.foreign_address AS foreign_address,
 FROM
     ip_traffic
 INNER JOIN gold_dim_network_socket soc
 ON         soc.source_port = ip_traffic.port
 AND        ip_traffic.created_at >= soc.started_at
 AND        ip_traffic.created_at <= soc.inserted_at
-WHERE      HOST(ip_traffic.address::INET) IN
-           (
-                  SELECT host.host
-                  FROM gold_dim_network_interface int
-                  LEFT JOIN gold_dim_network_host host ON host.address = int.address
-           )
+WHERE      ip_traffic.address IN (SELECT host FROM interface_host)
 AND        ip_traffic.port = ?
 AND        soc.pid = ?
 GROUP BY   ip_traffic.foreign_address
