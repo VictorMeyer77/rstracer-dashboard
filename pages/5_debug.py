@@ -105,7 +105,17 @@ network_consistency_column = st.columns(2)
 
 foreign_ip_packet_without_process = con.execute(
     """
-WITH local_ip AS
+WITH fact_ip_host AS
+(
+    SELECT
+     fact.*,
+     host1.host AS source_host,
+     host2.host AS destination_host
+    FROM gold_fact_network_ip fact
+    LEFT JOIN gold_dim_network_host host1 ON fact.source_address = host1.address
+    LEFT JOIN gold_dim_network_host host2 ON fact.destination_address = host2.address
+),
+interface_host AS
 (
     SELECT host.host
     FROM gold_dim_network_interface int
@@ -114,14 +124,14 @@ WITH local_ip AS
 foreign_ip_without_process AS
 (
     SELECT ip.*
-    FROM gold_fact_network_ip ip
+    FROM fact_ip_host ip
     LEFT JOIN gold_fact_process_network pro_net ON ip._id = pro_net.packet_id
     WHERE pro_net.send IS NULL
-    AND NOT HOST(ip.source_address::INET) IN (SELECT host FROM local_ip)
-    AND HOST(ip.destination_address::INET) IN (SELECT host FROM local_ip)
+    AND NOT ip.source_host IN (SELECT host FROM interface_host)
+    AND ip.destination_host IN (SELECT host FROM interface_host)
 )
 SELECT
-    HOST(foreign_packet.address::INET) AS address,
+    foreign_packet.address,
     foreign_packet.port AS port,
     COUNT(*) AS count,
     ROUND(SUM(fact_packet.length) / (1024 * 1024), 3) AS size,
@@ -129,17 +139,17 @@ FROM
 (
     SELECT
         _id,
-        destination_address AS address,
+        destination_host AS address,
         source_port AS port,
     FROM foreign_ip_without_process
-    WHERE HOST(source_address::INET) IN (SELECT host FROM local_ip)
+    WHERE source_host IN (SELECT host FROM interface_host)
     UNION ALL
     SELECT
         _id,
-        source_address AS address,
+        source_host AS address,
         destination_port AS port,
     FROM foreign_ip_without_process
-    WHERE HOST(destination_address::INET) IN (SELECT host FROM local_ip)
+    WHERE destination_host IN (SELECT host FROM interface_host)
 ) foreign_packet
 LEFT JOIN gold_fact_network_packet fact_packet ON fact_packet._id = foreign_packet._id
 GROUP BY
