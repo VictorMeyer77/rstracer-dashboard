@@ -66,6 +66,11 @@ source .venv/bin/activate
 make install
 ```
 
+If you encounter a path-related error during lineage downloading, ensure Graphviz is installed:
+```shell
+apt-get install graphviz
+```
+
 ---
 
 ## Usage
