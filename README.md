@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/VictorMeyer77/rstracer-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/VictorMeyer77/rstracer-dashboard/actions/workflows/ci.yml)
 
-**A Behavior Analysis Tool for UNIX Systems**
+**A System Monitoring Tool for UNIX Systems**
 
 ---
 
