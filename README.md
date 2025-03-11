@@ -38,7 +38,7 @@
 Install `rstracer` and its dependencies:
 
 ```shell
-cargo install --git https://github.com/VictorMeyer77/rstracer.git --tag 0.1.0
+cargo install --git https://github.com/VictorMeyer77/rstracer.git --tag 0.1.1
 ```
 
 Additionally, ensure the following dependencies are installed:
